@@ -20,9 +20,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor whiteColor];
-    if ([self respondsToSelector:@selector(setAutomaticallyAdjustsScrollViewInsets:)]) {
-        self.automaticallyAdjustsScrollViewInsets = NO;
-    }
+    self.textView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     
     NSMutableAttributedString *text = [NSMutableAttributedString new];
     NSArray *tags = @[@"◉red", @"◉orange", @"◉yellow", @"◉green", @"◉blue", @"◉purple", @"◉gray"];
@@ -79,6 +77,7 @@
     textView.attributedText = text;
     textView.size = self.view.size;
     textView.textContainerInset = UIEdgeInsetsMake(10 + 64, 10, 10, 10);
+    textView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     textView.allowsCopyAttributedString = YES;
     textView.allowsPasteAttributedString = YES;
     textView.delegate = self;

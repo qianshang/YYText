@@ -24,9 +24,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor whiteColor];
-    if ([self respondsToSelector:@selector(setAutomaticallyAdjustsScrollViewInsets:)]) {
-        self.automaticallyAdjustsScrollViewInsets = NO;
-    }
+    self.textView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     
     NSMutableDictionary *mapper = [NSMutableDictionary new];
     mapper[@":smile:"] = [self imageWithName:@"002"];

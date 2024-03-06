@@ -24,7 +24,7 @@
 #import "UIView+YYText.h"
 
 
-static double _YYDeviceSystemVersion() {
+static double _YYDeviceSystemVersion(void) {
     static double version;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -637,11 +637,10 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     if (self.isFirstResponder || _containerView.isFirstResponder) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.01 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             UIMenuController *menu = [UIMenuController sharedMenuController];
-            [menu setTargetRect:CGRectStandardize(rect) inView:_selectionView];
-            [menu update];
+            
             if (!_state.showingMenu || !menu.menuVisible) {
                 _state.showingMenu = YES;
-                [menu setMenuVisible:YES animated:YES];
+                [menu showMenuFromView:_selectionView rect:CGRectStandardize(rect)];
             }
         });
     }
@@ -652,7 +651,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     if (_state.showingMenu) {
         _state.showingMenu = NO;
         UIMenuController *menu = [UIMenuController sharedMenuController];
-        [menu setMenuVisible:NO animated:YES];
+        [menu hideMenu];
     }
     if (_containerView.isFirstResponder) {
         _state.ignoreFirstResponder = YES;
@@ -733,7 +732,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
             if (CGRectGetMinY(inter) > CGRectGetMinY(bounds)) { // keyboard below self.top
                 
                 UIEdgeInsets originalContentInset = self.contentInset;
-                UIEdgeInsets originalScrollIndicatorInsets = self.scrollIndicatorInsets;
+                UIEdgeInsets originalScrollIndicatorInsets = self.verticalScrollIndicatorInsets;
                 if (_insetModifiedByKeyboard) {
                     originalContentInset = _originalContentInset;
                     originalScrollIndicatorInsets = _originalScrollIndicatorInsets;
@@ -744,7 +743,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
                     if (!_insetModifiedByKeyboard) {
                         _insetModifiedByKeyboard = YES;
                         _originalContentInset = self.contentInset;
-                        _originalScrollIndicatorInsets = self.scrollIndicatorInsets;
+                        _originalScrollIndicatorInsets = self.verticalScrollIndicatorInsets;
                     }
                     UIEdgeInsets newInset = originalContentInset;
                     UIEdgeInsets newIndicatorInsets = originalScrollIndicatorInsets;
@@ -758,7 +757,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
                     }
                     [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction | curve animations:^{
                         [super setContentInset:newInset];
-                        [super setScrollIndicatorInsets:newIndicatorInsets];
+                        [super setVerticalScrollIndicatorInsets:newIndicatorInsets];
                         [self scrollRectToVisible:CGRectInset(rect, -extend, -extend) animated:NO];
                     } completion:NULL];
                 }
@@ -1953,8 +1952,8 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     
     // UITextInputTraits
     _autocapitalizationType = UITextAutocapitalizationTypeSentences;
-    _autocorrectionType = UITextAutocorrectionTypeDefault;
-    _spellCheckingType = UITextSpellCheckingTypeDefault;
+    _autocorrectionType = UITextAutocorrectionTypeNo;
+    _spellCheckingType = UITextSpellCheckingTypeNo;
     _keyboardType = UIKeyboardTypeDefault;
     _keyboardAppearance = UIKeyboardAppearanceDefault;
     _returnKeyType = UIReturnKeyDefault;
@@ -2167,10 +2166,10 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     [self _endTouchTracking];
     [self _hideMenu];
     
-    [_inputDelegate selectionWillChange:self];
-    [_inputDelegate textWillChange:self];
      _innerText = text;
     [self _parseText];
+    [_inputDelegate selectionWillChange:self];
+    [_inputDelegate textWillChange:self];
     _selectedTextRange = [YYTextRange rangeWithRange:NSMakeRange(0, _innerText.length)];
     [_inputDelegate textDidChange:self];
     [_inputDelegate selectionDidChange:self];
@@ -3455,10 +3454,10 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     _lastTypeRange = _selectedTextRange.asRange;
 }
 
-- (void)setBaseWritingDirection:(UITextWritingDirection)writingDirection forRange:(YYTextRange *)range {
+- (void)setBaseWritingDirection:(NSWritingDirection)writingDirection forRange:(YYTextRange *)range {
     if (!range) return;
     range = [self _correctedTextRange:range];
-    [_innerText yy_setBaseWritingDirection:(NSWritingDirection)writingDirection range:range.asRange];
+    [_innerText yy_setBaseWritingDirection:writingDirection range:range.asRange];
     [self _commitUpdate];
 }
 
@@ -3468,11 +3467,11 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     return [_innerText.string substringWithRange:range.asRange];
 }
 
-- (UITextWritingDirection)baseWritingDirectionForPosition:(YYTextPosition *)position inDirection:(UITextStorageDirection)direction {
+- (NSWritingDirection)baseWritingDirectionForPosition:(YYTextPosition *)position inDirection:(UITextStorageDirection)direction {
     [self _updateIfNeeded];
     position = [self _correctedTextPosition:position];
-    if (!position) return UITextWritingDirectionNatural;
-    if (_innerText.length == 0) return UITextWritingDirectionNatural;
+    if (!position) return NSWritingDirectionNatural;
+    if (_innerText.length == 0) return NSWritingDirectionNatural;
     NSUInteger idx = position.offset;
     if (idx == _innerText.length) idx--;
     
@@ -3481,11 +3480,11 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     if (paraStyle) {
         CTWritingDirection baseWritingDirection;
         if (CTParagraphStyleGetValueForSpecifier(paraStyle, kCTParagraphStyleSpecifierBaseWritingDirection, sizeof(CTWritingDirection), &baseWritingDirection)) {
-            return (UITextWritingDirection)baseWritingDirection;
+            return (NSWritingDirection)baseWritingDirection;
         }
     }
     
-    return UITextWritingDirectionNatural;
+    return NSWritingDirectionNatural;
 }
 
 - (YYTextPosition *)beginningOfDocument {

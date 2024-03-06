@@ -88,7 +88,6 @@
     [self.view addSubview:self.tableView];
     
     
-    
     NSMutableArray *strings = [NSMutableArray new];
     NSMutableArray *layouts = [NSMutableArray new];
     for (int i = 0; i < 300; i++) {
@@ -121,14 +120,22 @@
     
     UIView *toolbar;
     if ([UIVisualEffectView class]) {
-        toolbar = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleExtraLight]];
+        toolbar = [UIView new];
+        toolbar.size = CGSizeMake(kScreenWidth, 40);
+        toolbar.top = kiOS7Later ? 64 : 0;
+        
+        UIVisualEffectView *effView = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleExtraLight]];
+        [toolbar addSubview:effView];
+        effView.frame = toolbar.bounds;
     } else {
         toolbar = [UIToolbar new];
+        toolbar.size = CGSizeMake(kScreenWidth, 40);
+        toolbar.top = kiOS7Later ? 64 : 0;
     }
-    toolbar.size = CGSizeMake(kScreenWidth, 40);
-    toolbar.top = kiOS7Later ? 64 : 0;
     [self.view addSubview:toolbar];
     
+    self.tableView.contentInset = UIEdgeInsetsMake(CGRectGetHeight(toolbar.frame), 0, 0, 0);
+    self.tableView.verticalScrollIndicatorInsets = UIEdgeInsetsMake(CGRectGetHeight(toolbar.frame), 0, 0, 0);
     
     YYFPSLabel *fps = [YYFPSLabel new];
     fps.centerY = toolbar.height / 2;

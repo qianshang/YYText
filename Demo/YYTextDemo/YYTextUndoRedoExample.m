@@ -24,10 +24,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor whiteColor];
-    if ([self respondsToSelector:@selector(setAutomaticallyAdjustsScrollViewInsets:)]) {
-        self.automaticallyAdjustsScrollViewInsets = NO;
-    }
-    
+    self.textView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     
     NSString *text = @"You can shake the device to undo and redo.";
     
