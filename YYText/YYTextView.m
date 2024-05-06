@@ -586,6 +586,11 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 
 /// Show and update the UIMenuController.
 - (void)_showMenu {
+    //过滤预输入状态
+    if (_markedTextRange != nil) {
+        return;
+    }
+    
     CGRect rect;
     if (_selectionView.caretVisible) {
         rect = _selectionView.caretView.frame;
