@@ -3246,7 +3246,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     _state.typingAttributesOnce = NO;
     
     // test if there's 'TextBinding' before the caret
-    if (!_state.deleteConfirm && range.length == 0 && range.location > 0) {
+    if (!_state.deleteConfirm && range.length == 0 && range.location > 0 && _innerText.length >= range.location) {
         NSRange effectiveRange;
         YYTextBinding *binding = [_innerText attribute:YYTextBindingAttributeName atIndex:range.location - 1 longestEffectiveRange:&effectiveRange inRange:NSMakeRange(0, _innerText.length)];
         if (binding && binding.deleteConfirm) {
