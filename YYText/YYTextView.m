@@ -152,6 +152,9 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     NSMutableArray *_redoStack;
     NSRange _lastTypeRange;
     
+    BOOL _needUpdateText;
+    BOOL _needUpdateSelection;
+    
     struct {
         unsigned int trackingGrabber : 2;       ///< YYTextGrabberDirection, current tracking grabber
         unsigned int trackingCaret : 1;         ///< track the caret
@@ -1426,14 +1429,14 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 /// The caller should make sure the `range` and `text` are valid before call this method.
 - (void)_replaceRange:(YYTextRange *)range withText:(NSString *)text notifyToDelegate:(BOOL)notify{
     if (NSEqualRanges(range.asRange, _selectedTextRange.asRange)) {
-        if (notify) [_inputDelegate selectionWillChange:self];
+        if (notify) [self callDelegateSectionWillChange];
         NSRange newRange = NSMakeRange(0, 0);
         newRange.location = _selectedTextRange.start.offset + text.length;
         _selectedTextRange = [YYTextRange rangeWithRange:newRange];
-        if (notify) [_inputDelegate selectionDidChange:self];
+        if (notify) [self callDelegateSectionDidChange];
     } else {
         if (range.asRange.length != text.length) {
-            if (notify) [_inputDelegate selectionWillChange:self];
+            if (notify) [self callDelegateSectionWillChange];
             NSRange unionRange = NSIntersectionRange(_selectedTextRange.asRange, range.asRange);
             if (unionRange.length == 0) {
                 // no intersection
@@ -1467,14 +1470,14 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
                 }
             }
             _selectedTextRange = [self _correctedTextRange:_selectedTextRange];
-            if (notify) [_inputDelegate selectionDidChange:self];
+            if (notify) [self callDelegateSectionDidChange];
         }
     }
-    if (notify) [_inputDelegate textWillChange:self];
+    if (notify) [self callDelegateTextWillChange];
     NSRange newRange = NSMakeRange(range.asRange.location, text.length);
     [_innerText replaceCharactersInRange:range.asRange withString:text];
     [_innerText yy_removeDiscontinuousAttributesInRange:newRange];
-    if (notify) [_inputDelegate textDidChange:self];
+    if (notify) [self callDelegateTextDidChange];
 }
 
 /// Save current typing attributes to the attributes holder.
@@ -1521,17 +1524,17 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         YYTextRange *oldTextRange = _selectedTextRange;
         NSRange newRange = _selectedTextRange.asRange;
         
-        [_inputDelegate textWillChange:self];
+        [self callDelegateTextWillChange];
         BOOL textChanged = [self.textParser parseText:_innerText selectedRange:&newRange];
-        [_inputDelegate textDidChange:self];
+        [self callDelegateTextDidChange];
         
         YYTextRange *newTextRange = [YYTextRange rangeWithRange:newRange];
         newTextRange = [self _correctedTextRange:newTextRange];
         
         if (![oldTextRange isEqual:newTextRange]) {
-            [_inputDelegate selectionWillChange:self];
+            [self callDelegateSectionWillChange];
             _selectedTextRange = newTextRange;
-            [_inputDelegate selectionDidChange:self];
+            [self callDelegateSectionDidChange];
         }
         return textChanged;
     }
@@ -2173,11 +2176,11 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     
      _innerText = text;
     [self _parseText];
-    [_inputDelegate selectionWillChange:self];
-    [_inputDelegate textWillChange:self];
+    [self callDelegateSectionWillChange];
+    [self callDelegateTextWillChange];
     _selectedTextRange = [YYTextRange rangeWithRange:NSMakeRange(0, _innerText.length)];
-    [_inputDelegate textDidChange:self];
-    [_inputDelegate selectionDidChange:self];
+    [self callDelegateTextDidChange];
+    [self callDelegateSectionDidChange];
     
     [self _setAttributedText:text];
     if (_innerText.length > 0) {
@@ -2725,9 +2728,9 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         
         if (_trackingRange && (![_trackingRange isEqual:_selectedTextRange] || _state.trackingPreSelect)) {
             if (![_trackingRange isEqual:_selectedTextRange]) {
-                [_inputDelegate selectionWillChange:self];
+                [self callDelegateSectionWillChange];
                 _selectedTextRange = _trackingRange;
-                [_inputDelegate selectionDidChange:self];
+                [self callDelegateSectionDidChange];
                 [self _updateAttributesHolder];
                 [self _updateOuterProperties];
             }
@@ -3009,9 +3012,9 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     if (_selectedTextRange.asRange.length > 0 || _innerText.length == 0) return;
     YYTextRange *newRange = [self _getClosestTokenRangeAtPosition:_selectedTextRange.start];
     if (newRange.asRange.length > 0) {
-        [_inputDelegate selectionWillChange:self];
+        [self callDelegateSectionWillChange];
         _selectedTextRange = newRange;
-        [_inputDelegate selectionDidChange:self];
+        [self callDelegateSectionDidChange];
     }
     
     [self _updateIfNeeded];
@@ -3023,9 +3026,9 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 
 - (void)selectAll:(id)sender {
     _trackingRange = nil;
-    [_inputDelegate selectionWillChange:self];
+    [self callDelegateSectionWillChange];
     _selectedTextRange = [YYTextRange rangeWithRange:NSMakeRange(0, _innerText.length)];
-    [_inputDelegate selectionDidChange:self];
+    [self callDelegateSectionDidChange];
     
     [self _updateIfNeeded];
     [self _updateOuterProperties];
@@ -3118,25 +3121,25 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
     [[YYTextEffectWindow sharedWindow] hideSelectionDot:_selectionView];
     
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewDidScroll:scrollView];
     }
 }
 
 - (void)scrollViewDidZoom:(UIScrollView *)scrollView {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewDidZoom:scrollView];
     }
 }
 
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewWillBeginDragging:scrollView];
     }
 }
 
 - (void)scrollViewWillEndDragging:(UIScrollView *)scrollView withVelocity:(CGPoint)velocity targetContentOffset:(inout CGPoint *)targetContentOffset {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewWillEndDragging:scrollView withVelocity:velocity targetContentOffset:targetContentOffset];
     }
 }
@@ -3146,13 +3149,13 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         [[YYTextEffectWindow sharedWindow] showSelectionDot:_selectionView];
     }
     
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewDidEndDragging:scrollView willDecelerate:decelerate];
     }
 }
 
 - (void)scrollViewWillBeginDecelerating:(UIScrollView *)scrollView {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewWillBeginDecelerating:scrollView];
     }
 }
@@ -3160,19 +3163,19 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
     [[YYTextEffectWindow sharedWindow] showSelectionDot:_selectionView];
     
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewDidEndDecelerating:scrollView];
     }
 }
 
 - (void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewDidEndScrollingAnimation:scrollView];
     }
 }
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         return [_outerDelegate viewForZoomingInScrollView:scrollView];
     } else {
         return nil;
@@ -3180,26 +3183,26 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 }
 
 - (void)scrollViewWillBeginZooming:(UIScrollView *)scrollView withView:(UIView *)view{
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewWillBeginZooming:scrollView withView:view];
     }
 }
 
 - (void)scrollViewDidEndZooming:(UIScrollView *)scrollView withView:(UIView *)view atScale:(CGFloat)scale {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewDidEndZooming:scrollView withView:view atScale:scale];
     }
 }
 
 - (BOOL)scrollViewShouldScrollToTop:(UIScrollView *)scrollView {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         return [_outerDelegate scrollViewShouldScrollToTop:scrollView];
     }
     return YES;
 }
 
 - (void)scrollViewDidScrollToTop:(UIScrollView *)scrollView {
-    if ([_outerDelegate respondsToSelector:_cmd]) {
+    if (_outerDelegate != self && [_outerDelegate respondsToSelector:_cmd]) {
         [_outerDelegate scrollViewDidScrollToTop:scrollView];
     }
 }
@@ -3251,10 +3254,10 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         YYTextBinding *binding = [_innerText attribute:YYTextBindingAttributeName atIndex:range.location - 1 longestEffectiveRange:&effectiveRange inRange:NSMakeRange(0, _innerText.length)];
         if (binding && binding.deleteConfirm) {
             _state.deleteConfirm = YES;
-            [_inputDelegate selectionWillChange:self];
+            [self callDelegateSectionWillChange];
             _selectedTextRange = [YYTextRange rangeWithRange:effectiveRange];
             _selectedTextRange = [self _correctedTextRange:_selectedTextRange];
-            [_inputDelegate selectionDidChange:self];
+            [self callDelegateSectionDidChange];
             
             [self _updateOuterProperties];
             [self _updateSelectionView];
@@ -3292,10 +3295,10 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     _state.deleteConfirm = NO;
     _state.typingAttributesOnce = NO;
     
-    [_inputDelegate selectionWillChange:self];
+    [self callDelegateSectionWillChange];
     _selectedTextRange = selectedTextRange;
     _lastTypeRange = _selectedTextRange.asRange;
-    [_inputDelegate selectionDidChange:self];
+    [self callDelegateSectionDidChange];
     
     [self _updateOuterProperties];
     [self _updateSelectionView];
@@ -3342,8 +3345,8 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         [self replaceRange:_selectedTextRange withText:@""];
     }
     
-    [_inputDelegate textWillChange:self];
-    [_inputDelegate selectionWillChange:self];
+    [self callDelegateTextWillChange];
+    [self callDelegateSectionWillChange];
     
     if (!markedText) markedText = @"";
     if (_markedTextRange == nil) {
@@ -3368,8 +3371,8 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         [_innerText yy_removeDiscontinuousAttributesInRange:_markedTextRange.asRange];
     }
     
-    [_inputDelegate selectionDidChange:self];
-    [_inputDelegate textDidChange:self];
+    [self callDelegateSectionDidChange];
+    [self callDelegateTextDidChange];
     
     [self _updateOuterProperties];
     [self _updateLayout];
@@ -3688,6 +3691,27 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 
 - (NSInteger)characterOffsetOfPosition:(YYTextPosition *)position withinRange:(YYTextRange *)range {
     return position ? position.offset : NSNotFound;
+}
+
+- (void)callDelegateTextWillChange {
+    if (_needUpdateText) return;
+    _needUpdateText = YES;
+    [_inputDelegate textWillChange:self];
+}
+- (void)callDelegateTextDidChange {
+    if (!_needUpdateText) return;
+    [_inputDelegate textDidChange:self];
+    _needUpdateText = NO;
+}
+- (void)callDelegateSectionWillChange {
+    if (!_needUpdateSelection) return;
+    _needUpdateSelection = YES;
+    [_inputDelegate selectionWillChange:self];
+}
+- (void)callDelegateSectionDidChange {
+    if (_needUpdateSelection) return;
+    [_inputDelegate selectionDidChange:self];
+    _needUpdateSelection = NO;
 }
 
 @end
